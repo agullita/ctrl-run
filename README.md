@@ -7,6 +7,8 @@ MVP single-player de un árbitro fisiológico: conecta Strava, recibe una misió
 - **Stack:** React 19 + TypeScript + Vite + Tailwind CSS v4 + Recharts + Supabase + Strava API.
 - **Estética:** terminal brutalista, JetBrains Mono + Space Grotesk, verde señal `#39ff14`, rojo sangre `#b30000`.
 - **Estado actual:** flujo demo funcional de punta a punta. Sin variables de entorno, corre con un stream mock determinista de 40 minutos que puntúa **850/1000** y activa la alerta de redline.
+- **Demo online:** <https://ctrl-run-chi.vercel.app>
+- **Repositorio:** <https://github.com/agullita/ctrl-run>
 
 ## Arranque rápido
 
@@ -110,6 +112,21 @@ La Edge Function consulta:
 - `GET /api/v3/activities/{id}/streams?keys=time,heartrate&key_by_type=true`
 
 El frontend normaliza la respuesta antes de puntuar.
+
+## Demo online y Vercel
+
+- Producción: <https://ctrl-run-chi.vercel.app>
+- Repositorio conectado: los pushes a `master` generan un deploy automático.
+- Sin variables configuradas en Vercel, la demo online usa el stream mock local.
+
+Para activar Strava real en producción:
+
+1. En Strava, cambiá **Authorization Callback Domain** a `ctrl-run-chi.vercel.app`.
+2. En Vercel, agregá `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_STRAVA_CLIENT_ID`, `VITE_STRAVA_REDIRECT_URI=https://ctrl-run-chi.vercel.app/auth/strava` y `VITE_STRAVA_DEMO_MODE=false`.
+3. Ejecutá `supabase secrets set STRAVA_REDIRECT_URI=https://ctrl-run-chi.vercel.app/auth/strava` junto con las credenciales de Strava.
+4. Redesplegá para reconstruir el bundle con las variables.
+
+Un dominio propio se configura desde Vercel y debe coincidir en Strava, `.env` y los secrets de Supabase.
 
 ## Variables de entorno
 
