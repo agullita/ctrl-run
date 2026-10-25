@@ -1,29 +1,29 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { BracketLabel, CornerMarks, StatusDot } from "../components/Icons";
+import { useRun } from "../context/RunContext";
 import {
-  STRAVA_DEMO_MODE,
-  connectStravaSession,
+  SUUNTO_DEMO_MODE,
+  connectDemoSession,
   consumeOAuthState,
-  exchangeStravaCode,
-  saveStravaTokens,
-} from "../lib/strava";
+} from "../lib/suunto";
 
-type Phase = "working" | "error";
+type Phase = "working" | "success" | "error";
 
-export function AuthCallbackPage() {
+export function SuuntoCallbackPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const { completeConnection } = useRun();
   const startedRef = useRef(false);
   const [phase, setPhase] = useState<Phase>("working");
-  const [message, setMessage] = useState("Validando respuesta de Strava...");
+  const [message, setMessage] = useState("Validando respuesta de Suunto...");
 
   useEffect(() => {
     if (startedRef.current) return;
     startedRef.current = true;
 
-    if (STRAVA_DEMO_MODE) {
-      connectStravaSession();
+    if (SUUNTO_DEMO_MODE) {
+      connectDemoSession();
       navigate("/panel", { replace: true });
       return;
     }
@@ -34,7 +34,7 @@ export function AuthCallbackPage() {
 
     if (error) {
       setPhase("error");
-      setMessage(`Strava rechazó la autorización: ${error}`);
+      setMessage(`Suunto rechazó la autorización: ${error}`);
       return;
     }
 
@@ -51,13 +51,17 @@ export function AuthCallbackPage() {
       return;
     }
 
-    setMessage("Intercambiando código por token de acceso...");
+    setMessage("Intercambiando código por token en la Edge Function...");
 
-    exchangeStravaCode(code)
-      .then((token) => {
-        saveStravaTokens(token);
-        setMessage("Token seguro. Abriendo el panel de control...");
-        window.setTimeout(() => navigate("/panel", { replace: true }), 500);
+    completeConnection(code)
+      .then((status) => {
+        setPhase("success");
+        setMessage(
+          status.username
+            ? `Cuenta ${status.username} enlazada. Abriendo el panel...`
+            : "Token guardado de forma segura. Abriendo el panel...",
+        );
+        window.setTimeout(() => navigate("/panel", { replace: true }), 700);
       })
       .catch((exchangeError: unknown) => {
         setPhase("error");
@@ -67,29 +71,42 @@ export function AuthCallbackPage() {
             : "No se pudo completar el intercambio de token.",
         );
       });
-  }, [navigate, params]);
+  }, [completeConnection, navigate, params]);
 
   return (
     <div className="mx-auto flex min-h-[70vh] max-w-[1480px] items-center px-4 py-12 sm:px-6 lg:px-10">
       <div className="relative w-full border border-white/10 bg-[#080908] p-6 sm:p-10">
         <CornerMarks tone={phase === "error" ? "blood" : "signal"} />
         <div className="flex flex-wrap items-center gap-3">
-          <BracketLabel>OAuth2 / callback</BracketLabel>
+          <BracketLabel>OAuth2 / Suunto callback</BracketLabel>
           <span className="flex items-center gap-2 font-mono text-[8px] uppercase tracking-[0.16em] text-white/30">
-            <StatusDot tone={phase === "error" ? "blood" : "signal"} pulse />
-            {phase === "error" ? "HANDSHAKE_FAILED" : "HANDSHAKE_ACTIVE"}
+            <StatusDot
+              tone={phase === "error" ? "blood" : "signal"}
+              pulse={phase === "working"}
+            />
+            {phase === "error"
+              ? "HANDSHAKE_FAILED"
+              : phase === "success"
+                ? "TOKEN_STORED"
+                : "HANDSHAKE_ACTIVE"}
           </span>
         </div>
 
         <h1 className="mt-6 font-display text-[clamp(2.2rem,5vw,4rem)] font-bold uppercase leading-[0.9] tracking-[-0.055em]">
           {phase === "error" ? "Enlace" : "Sincronizando"}
-          <span className={phase === "error" ? "block text-blood-bright" : "block text-signal"}>
+          <span
+            className={
+              phase === "error"
+                ? "block text-blood-bright"
+                : "block text-signal"
+            }
+          >
             {phase === "error" ? "interrumpido." : "motor."}
           </span>
         </h1>
 
         <div className="mt-7 max-w-xl border border-white/10 bg-black px-4 py-4 font-mono text-[9px] uppercase leading-6 tracking-[0.12em] text-white/40">
-          <div className="text-signal/70">&gt; strava.oauth.callback</div>
+          <div className="text-signal/70">&gt; suunto.oauth.callback</div>
           <div className="mt-1">&gt; {message}</div>
         </div>
 

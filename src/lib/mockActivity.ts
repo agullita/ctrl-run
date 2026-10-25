@@ -1,18 +1,12 @@
 import type { Activity, ActivityPayload, Mission } from "./types";
 
-export const MOCK_ACTIVITY_ID = "ctrlrun-demo-001";
-export const MOCK_STARTED_AT = "2026-10-22T06:42:00+02:00";
-
+export const MOCK_ACTIVITY_ID = "suunto-demo-2700";
+export const MOCK_STARTED_AT = "2026-10-25T07:12:00+01:00";
 export const MISSION_01: Mission = {
   id: "mission-monk-01",
   code: "M-01",
   name: "El Monje",
-  objective: "40 minutos. Target estricto: entre 125 y 135 bpm",
-  durationMinutes: 40,
-  targetMin: 125,
-  targetMax: 135,
-  baseScore: 1000,
-  tolerance: 5,
+  durationMinutes: 45,
 };
 
 interface HeartRateSegment {
@@ -25,15 +19,17 @@ interface HeartRateSegment {
 }
 
 const SEGMENTS: HeartRateSegment[] = [
-  { duration: 6, from: 98, to: 123, floor: 94, ceiling: 124, jitter: 2.4 },
-  { duration: 24, from: 120, to: 124, floor: 118, ceiling: 124, jitter: 1.6 },
-  { duration: 570, from: 128, to: 130, floor: 126, ceiling: 134, jitter: 3.6 },
-  { duration: 25, from: 137, to: 142, floor: 136, ceiling: 144, jitter: 2.2 },
-  { duration: 495, from: 129, to: 131, floor: 126, ceiling: 134, jitter: 3.2 },
-  { duration: 31, from: 147, to: 153, floor: 146, ceiling: 154, jitter: 1.4 },
-  { duration: 599, from: 131, to: 129, floor: 126, ceiling: 134, jitter: 3.1 },
-  { duration: 8, from: 124, to: 119, floor: 117, ceiling: 124, jitter: 1.4 },
-  { duration: 642, from: 127, to: 130, floor: 126, ceiling: 134, jitter: 2.8 },
+  { duration: 90, from: 110, to: 123, floor: 108, ceiling: 124, jitter: 2.2 },
+  { duration: 90, from: 124, to: 129, floor: 123, ceiling: 129, jitter: 1.7 },
+  { duration: 600, from: 134, to: 136, floor: 130, ceiling: 139, jitter: 2.4 },
+  { duration: 60, from: 141, to: 146, floor: 141, ceiling: 147, jitter: 1.6 },
+  { duration: 480, from: 133, to: 137, floor: 130, ceiling: 139, jitter: 2.5 },
+  { duration: 60, from: 129, to: 124, floor: 123, ceiling: 129, jitter: 1.4 },
+  { duration: 480, from: 132, to: 138, floor: 130, ceiling: 139, jitter: 2.6 },
+  { duration: 60, from: 142, to: 149, floor: 142, ceiling: 150, jitter: 1.4 },
+  { duration: 420, from: 134, to: 136, floor: 131, ceiling: 138, jitter: 2.2 },
+  { duration: 60, from: 129, to: 123, floor: 122, ceiling: 129, jitter: 1.4 },
+  { duration: 300, from: 135, to: 136, floor: 132, ceiling: 138, jitter: 1.8 },
 ];
 
 function mulberry32(seed: number): () => number {
@@ -49,7 +45,7 @@ function mulberry32(seed: number): () => number {
 }
 
 export function buildMockHeartRate(): number[] {
-  const random = mulberry32(3917);
+  const random = mulberry32(2501);
   const heartrate: number[] = [];
 
   for (const segment of SEGMENTS) {
@@ -57,13 +53,12 @@ export function buildMockHeartRate(): number[] {
       const progress = index / Math.max(1, segment.duration - 1);
       const baseline = segment.from + (segment.to - segment.from) * progress;
       const wave =
-        Math.sin((heartrate.length + 4) / 8.7) * 0.8 +
-        Math.sin((heartrate.length + 17) / 21.3) * 0.55;
+        Math.sin((heartrate.length + 3) / 7.4) * 0.8 +
+        Math.sin((heartrate.length + 19) / 23.8) * 0.6;
       const noise = (random() * 2 - 1) * segment.jitter;
       const bpm = Math.round(
         Math.min(segment.ceiling, Math.max(segment.floor, baseline + wave + noise)),
       );
-
       heartrate.push(bpm);
     }
   }
@@ -73,35 +68,26 @@ export function buildMockHeartRate(): number[] {
 
 export function createMockActivityPayload(): ActivityPayload {
   const heartrate = buildMockHeartRate();
-  const time = heartrate.map((_, index) => index);
   const averageHeartrate =
     heartrate.reduce((total, bpm) => total + bpm, 0) / heartrate.length;
 
   const activity: Activity = {
     id: MOCK_ACTIVITY_ID,
-    name: "Crucero de control / Auditoría 01",
-    sportType: "Run",
+    name: "Zona 2 / Control de motor",
+    sportType: "Running",
     startedAt: MOCK_STARTED_AT,
     elapsedTime: heartrate.length,
-    distance: 7420,
+    distance: 8240,
     averageHeartrate: Math.round(averageHeartrate * 10) / 10,
     maxHeartrate: Math.max(...heartrate),
-    elevationGain: 86,
-    deviceName: "Garmin Forerunner 965",
+    elevationGain: 94,
+    deviceName: "Suunto Race S",
     isDemo: true,
   };
 
   return {
     activity,
-    streams: [
-      { type: "time", data: time, series_type: "time", original_size: time.length },
-      {
-        type: "heartrate",
-        data: heartrate,
-        series_type: "time",
-        original_size: heartrate.length,
-      },
-    ],
-    origin: "local",
+    samples: heartrate.map((bpm, time) => ({ time, bpm })),
+    origin: "demo",
   };
 }

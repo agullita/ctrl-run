@@ -43,6 +43,10 @@ export function formatDistance(meters: number): string {
   return `${(meters / 1000).toFixed(2)} KM`;
 }
 
+export function formatBpm(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
 export function formatNumber(value: number): string {
   return new Intl.NumberFormat("es-ES").format(Math.round(value));
 }
@@ -56,7 +60,8 @@ export function clamp(value: number, min: number, max: number): number {
 }
 
 export function zoneLabel(status: ZoneStatus): string {
-  if (status === "target") return "EN DIANA";
+  if (status === "sweetspot") return "SWEET BAND";
+  if (status === "zone") return "EN ZONA 2";
   if (status === "below") return "DÉFICIT";
   return "EXCESO DE EGO";
 }

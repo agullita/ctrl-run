@@ -1,48 +1,55 @@
-import { ArrowDownRight, ArrowUpRight, Crosshair, Radio, Terminal } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Crosshair, Radio, SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { StravaButton, TerminalButton } from "../components/Buttons";
+import { SuuntoButton, TerminalButton } from "../components/Buttons";
 import {
   BracketLabel,
   CornerMarks,
   StatusDot,
-  StravaMark,
+  SuuntoMark,
 } from "../components/Icons";
 import { LandingTelemetry } from "../components/LandingTelemetry";
-import { StravaModal } from "../components/StravaModal";
+import { SuuntoModal } from "../components/SuuntoModal";
 import { useRun } from "../context/RunContext";
-import { STRAVA_DEMO_MODE } from "../lib/strava";
+import { DEFAULT_BIOMETRICS, createProfile } from "../lib/zones";
+import { SUUNTO_DEMO_MODE } from "../lib/suunto";
+
+const DEMO_PROFILE = createProfile(DEFAULT_BIOMETRICS.hrMax, DEFAULT_BIOMETRICS.hrRest);
+const DEMO_Z2 = DEMO_PROFILE.zones.z2!;
+const DEMO_SWEET = (DEMO_Z2.min + DEMO_Z2.max) / 2;
+const DEMO_SWEET_MIN = DEMO_SWEET - 2;
+const DEMO_SWEET_MAX = DEMO_SWEET + 2;
 
 const protocol = [
   {
     number: "01",
     icon: Radio,
     title: "Conecta",
-    text: "Strava entrega la serie temporal de pulso. Sin fotos, sin splits heroicos, sin storytelling.",
-    code: "GET /activities/{id}/streams",
+    text: "Suunto Cloud API entrega tus workouts y la serie de pulso. Sin fotos, sin splits heroicos, sin storytelling.",
+    code: "GET /v3/workouts/{key}",
   },
   {
     number: "02",
-    icon: Crosshair,
-    title: "Audita",
-    text: "Cada segundo se compara contra la diana. No importa tu ritmo. Importa tu obediencia fisiológica.",
-    code: "1 SAMPLE = 1 VERDICT",
+    icon: SlidersHorizontal,
+    title: "Calibra",
+    text: "Tu perfil define z2_min y z2_max. El motor calcula el centro exacto y crea una micro-franja de 4 latidos.",
+    code: "TARGET = (Z2_MIN + Z2_MAX) / 2",
   },
   {
     number: "03",
-    icon: Terminal,
-    title: "Penaliza",
-    text: "El exceso de ego cuesta el doble que la falta de empuje. La precisión no se negocia con la vanidad.",
-    code: "ABOVE -2 / BELOW -1",
+    icon: Crosshair,
+    title: "Audita",
+    text: "Cada segundo suma puntos dentro de la micro-franja central y resta con fuerza cuando el ego se sale de la zona.",
+    code: "+10 SWEET BAND / −5 × BPM EGO",
   },
 ];
 
 const ticker = [
   "NO REGISTRAS",
   "TE AUDITAN",
+  "SWEET BAND DINÁMICA",
   "APAGA EL EGO",
   "ENCIENDE EL CONTROL",
-  "ZONA 2 ESTRICTA",
   "1 SAMPLE = 1 SECOND",
   "RECARGA FISIOLÓGICA",
 ];
@@ -70,7 +77,7 @@ export function LandingPage() {
                 <StatusDot tone="signal" pulse />
                 PROTOCOLO 0x01
               </span>
-              <BracketLabel>ÁRBITRO FISIOLÓGICO</BracketLabel>
+              <BracketLabel>SUUNTO CLOUD / ÁRBITRO FISIOLÓGICO</BracketLabel>
             </div>
 
             <h1 className="mt-7 font-display text-[clamp(2.9rem,7vw,6.4rem)] font-bold uppercase leading-[0.84] tracking-[-0.065em]">
@@ -81,25 +88,25 @@ export function LandingPage() {
             </h1>
 
             <p className="mt-7 max-w-[610px] text-[15px] leading-relaxed text-white/55 sm:text-base">
-              El primer árbitro de disciplina fisiológica que penaliza el
-              sobreesfuerzo y premia el control de tu motor. Strava es para tu
-              ego; Ctrl+run es para tu rendimiento.
+              El primer árbitro de disciplina fisiológica que mide tu precisión
+              cardíaca con una curva dinámica. Tu reloj registra el esfuerzo;
+              Ctrl+run juzga el control.
             </p>
 
             <div className="mt-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-              <StravaButton onClick={() => setModalOpen(true)} />
+              <SuuntoButton onClick={() => setModalOpen(true)} />
               <span className="font-mono text-[8px] uppercase leading-relaxed tracking-[0.14em] text-white/25">
                 OAuth2 / solo lectura
                 <br />
-                {STRAVA_DEMO_MODE ? "flujo demo habilitado" : "conexión real"}
+                {SUUNTO_DEMO_MODE ? "flujo demo habilitado" : "Suunto Cloud API"}
               </span>
             </div>
 
             <div className="mt-9 grid max-w-[560px] grid-cols-3 border-t border-white/[0.08] pt-4 font-mono">
               {[
-                ["1000", "PTS BASE"],
+                ["Z2", `${DEMO_Z2.min}—${DEMO_Z2.max}`],
                 ["1 HZ", "RESOLUCIÓN"],
-                ["ZONA 2", "TARGET"],
+                ["0", "PUNTOS BASE"],
               ].map(([value, label], index) => (
                 <div
                   key={label}
@@ -129,8 +136,8 @@ export function LandingPage() {
             <div className="absolute -bottom-2 -left-2 hidden h-16 w-16 border-b border-l border-white/10 sm:block" />
             <LandingTelemetry />
             <div className="mt-3 flex items-center justify-between font-mono text-[7.5px] uppercase tracking-[0.16em] text-white/20">
-              <span>[TARGET] 125—135 BPM</span>
-              <span>NO_EGO / CONTROL_READY</span>
+              <span>[SWEET BAND] {DEMO_SWEET_MIN}—{DEMO_SWEET_MAX} BPM</span>
+              <span>SUUNTO_SYNC / PRECISION_READY</span>
             </div>
           </div>
         </div>
@@ -163,8 +170,8 @@ export function LandingPage() {
               </h2>
               <p className="mt-5 max-w-lg text-sm leading-relaxed text-white/45">
                 El ego convierte cada salida en una competencia. Ctrl+run la
-                convierte en una auditoría. Tu corazón no negocia: o respetas la
-                zona, o el marcador lo expone.
+                convierte en una auditoría. Tu corazón no negocia: o respetas el
+                Sweet Spot, o el marcador lo expone.
               </p>
               <div className="mt-7 flex items-center gap-3">
                 <span className="h-px w-12 bg-signal/50" />
@@ -178,7 +185,7 @@ export function LandingPage() {
               <CornerMarks />
               <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
                 <span className="font-mono text-[8px] uppercase tracking-[0.2em] text-white/40">
-                  SPEC / MISIÓN 01
+                  SPEC / MOTOR DE PRECISIÓN
                 </span>
                 <span className="flex items-center gap-2 font-mono text-[8px] uppercase tracking-[0.16em] text-signal/70">
                   <StatusDot tone="signal" />
@@ -187,23 +194,24 @@ export function LandingPage() {
               </div>
               <div className="divide-y divide-white/[0.06]">
                 {[
-                  ["OBJETIVO", "40 MIN EN ZONA 2"],
-                  ["TARGET", "125 — 135 BPM"],
-                  ["RESOLUCIÓN", "1 SEGUNDO"],
-                  ["PENALIZACIÓN EGO", "-2 PTS / SEG"],
-                  ["PENALIZACIÓN DÉFICIT", "-1 PT / SEG"],
-                  ["REDLINE", ">145 BPM / 30S → FALLO"],
+                  ["ENTRADA", "SUUNTO / HEARTRATE STREAM"],
+                  ["PERFIL", `Z2 ${DEMO_Z2.min}—${DEMO_Z2.max} BPM`],
+                  ["SWEET BAND", `${DEMO_SWEET_MIN}—${DEMO_SWEET_MAX} BPM`],
+                  ["MICRO-PASILLO", "+10 PTS / SEG"],
+                  ["ZONA PERIFÉRICA", "+5 PTS / SEG"],
+                  ["EGO", "−5 × BPM DE EXCESO"],
+                  ["DÉFICIT", "−2 × BPM POR DEBAJO"],
                 ].map(([label, value]) => (
                   <div
                     key={label}
-                    className="flex items-center justify-between gap-4 px-4 py-3.5"
+                    className="flex items-center justify-between gap-4 px-4 py-3"
                   >
                     <span className="font-mono text-[8px] uppercase tracking-[0.16em] text-white/30">
                       {label}
                     </span>
                     <span
-                      className={`text-right font-mono text-[10px] uppercase tracking-[0.1em] ${
-                        value.includes("145") ? "text-blood-bright" : "text-white/75"
+                      className={`text-right font-mono text-[9px] uppercase tracking-[0.08em] ${
+                        value.includes("−") ? "text-blood-bright" : "text-white/75"
                       }`}
                     >
                       {value}
@@ -250,44 +258,44 @@ export function LandingPage() {
               </h2>
             </div>
             <p className="max-w-sm font-mono text-[8px] uppercase leading-relaxed tracking-[0.14em] text-white/25">
-              Cada segundo fuera de la diana deja una marca. El marcador empieza
-              en 1000. No hay bonus por sufrimiento.
+              El marcador parte de 1000. Cada segundo de precisión protege la
+              puntuación; el ego y el déficit la descuentan.
             </p>
           </div>
 
           <div className="mt-10 grid gap-px border border-white/[0.08] bg-white/[0.08] sm:grid-cols-2 lg:grid-cols-4">
             {[
               {
-                tag: "[TARGET]",
-                value: "125—135",
-                unit: "BPM",
-                text: "La única zona que no cuesta puntos.",
+                tag: "[SWEET BAND]",
+                value: "+10",
+                unit: "PTS / SEG",
+                text: `Micro-pasillo de 4 latidos: ${DEMO_SWEET_MIN}—${DEMO_SWEET_MAX} bpm.`,
                 tone: "text-signal",
                 border: "border-t-signal",
               },
               {
-                tag: "[EGO]",
-                value: "-2",
+                tag: "[ZONA 2]",
+                value: "+5",
                 unit: "PTS / SEG",
-                text: "Cada segundo por encima de 135 bpm.",
+                text: "Dentro de la zona, pero fuera del micro-pasillo central.",
+                tone: "text-white/75",
+                border: "border-t-white/25",
+              },
+              {
+                tag: "[EGO]",
+                value: "−5×",
+                unit: "BPM EXCESO",
+                text: "Cada latido por encima de z2_max se paga caro.",
                 tone: "text-blood-bright",
                 border: "border-t-blood-bright",
               },
               {
                 tag: "[DÉFICIT]",
-                value: "-1",
-                unit: "PT / SEG",
-                text: "Cada segundo por debajo de 125 bpm.",
+                value: "−2×",
+                unit: "BPM BAJO",
+                text: "Cada latido por debajo de z2_min también resta.",
                 tone: "text-white/55",
                 border: "border-t-white/25",
-              },
-              {
-                tag: "[REDLINE]",
-                value: "FALLO",
-                unit: ">30 SEG",
-                text: "Más de 145 bpm durante 30 s activa la alerta.",
-                tone: "text-blood-bright",
-                border: "border-t-blood-bright",
               },
             ].map((rule) => (
               <div
@@ -320,16 +328,17 @@ export function LandingPage() {
             <div className="relative flex flex-col justify-between gap-8 lg:flex-row lg:items-end">
               <div>
                 <div className="flex items-center gap-2 font-mono text-[8px] uppercase tracking-[0.2em] text-signal/60">
-                  <StravaMark className="h-3 w-3" />
-                  STRAVA ES PARA TU EGO
+                  <SuuntoMark className="h-3 w-3" />
+                  SUUNTO REGISTRA. CTRL+RUN ARBITRA.
                 </div>
                 <h2 className="mt-5 max-w-3xl font-display text-[clamp(2rem,4.5vw,3.8rem)] font-bold uppercase leading-[0.9] tracking-[-0.055em]">
                   Tu próximo entrenamiento
                   <span className="block text-signal">no es una carrera.</span>
                 </h2>
                 <p className="mt-4 max-w-xl text-sm leading-relaxed text-white/45">
-                  Es una prueba de contención. Conecta Strava y deja que el
-                  árbitro haga el trabajo que tu ego no puede hacer solo.
+                  Es una prueba de contención. Sincroniza tu última actividad de
+                  Suunto y deja que el árbitro haga el trabajo que tu ego no puede
+                  hacer solo.
                 </p>
               </div>
               <TerminalButton
@@ -354,7 +363,7 @@ export function LandingPage() {
         </div>
       </section>
 
-      <StravaModal
+      <SuuntoModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         onAuthorize={handleAuthorize}

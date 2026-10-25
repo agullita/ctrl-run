@@ -8,6 +8,7 @@ const navigation = [
   { number: "01", label: "Inicio", to: "/" },
   { number: "02", label: "Panel", to: "/panel" },
   { number: "03", label: "Árbitro", to: "/arbitro" },
+  { number: "04", label: "Cargar", to: "/importar" },
 ];
 
 function NavItems({ compact = false }: { compact?: boolean }) {
@@ -76,7 +77,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 SYS.ONLINE
               </span>
               <span>SAMPLING 1HZ</span>
-              <span className="hidden lg:inline">OAUTH2 / READ,ACTIVITY:READ_ALL</span>
+              <span className="hidden lg:inline">OAUTH2 / WORKOUT</span>
             </div>
             <span>CTRL+R / BUILD 0.1.0</span>
           </div>
@@ -91,7 +92,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="flex items-center gap-3">
               <div className="hidden items-center gap-2 border border-white/10 bg-white/[0.02] px-3 py-2 font-mono text-[8.5px] uppercase tracking-[0.16em] text-white/45 sm:flex">
                 <StatusDot tone={connected ? "signal" : "warning"} />
-                {connected ? "Strava linked" : "Demo mode"}
+                {connected ? "Suunto linked" : "Demo mode"}
               </div>
               <Link
                 to="/panel"
@@ -134,7 +135,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
             <div className="flex flex-col justify-between gap-3 pt-6 sm:flex-row sm:items-end">
               <p className="max-w-md font-mono text-[9px] uppercase leading-relaxed tracking-[0.13em] text-white/25">
-                Strava es para tu ego. Ctrl+run es para tu rendimiento. La
+                Suunto registra el esfuerzo. Ctrl+run audita el control. La
                 precisión no se negocia con la vanidad.
               </p>
               <span className="font-mono text-[8px] tracking-[0.2em] text-white/15">

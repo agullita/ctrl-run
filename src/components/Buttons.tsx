@@ -1,6 +1,6 @@
 import { ArrowUpRight, LoaderCircle } from "lucide-react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { StravaMark } from "./Icons";
+import { SuuntoMark } from "./Icons";
 
 type TerminalButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "solid" | "outline" | "ghost" | "danger";
@@ -49,8 +49,8 @@ export function TerminalButton({
   );
 }
 
-export function StravaButton({
-  children = "Sincronizar con Strava",
+export function SuuntoButton({
+  children = "Sincronizar con Suunto",
   loading = false,
   className = "",
   ...rest
@@ -68,7 +68,7 @@ export function StravaButton({
         {loading ? (
           <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" />
         ) : (
-          <StravaMark className="h-4 w-4" />
+          <SuuntoMark className="h-4 w-4" />
         )}
         <span className="font-mono text-[11px] font-bold uppercase tracking-[0.14em]">
           {loading ? "Estableciendo enlace..." : children}

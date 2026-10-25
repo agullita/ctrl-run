@@ -10,8 +10,9 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  type TooltipContentProps,
 } from "recharts";
-import { formatDuration, zoneLabel } from "../lib/format";
+import { formatBpm, formatNumber, formatDuration, zoneLabel } from "../lib/format";
 import type { HeartRateSample, ScoreResult } from "../lib/types";
 
 type ChartPoint = {
@@ -19,16 +20,15 @@ type ChartPoint = {
   bpm: number;
   target: number | null;
   above: number | null;
-  redline: number | null;
   deficit: number | null;
-  ego: number | null;
-  label: string;
+  status: HeartRateSample["status"];
+  points: number;
 };
 
-function buildChartData(series: HeartRateSample[], config: ScoreResult["config"]): ChartPoint[] {
-  const step = Math.max(1, Math.ceil(series.length / 760));
-  const sampled = series.filter((_, index) => index % step === 0);
-  const last = series[series.length - 1];
+function buildChartData(result: ScoreResult): ChartPoint[] {
+  const step = Math.max(1, Math.ceil(result.series.length / 900));
+  const sampled = result.series.filter((_, index) => index % step === 0);
+  const last = result.series[result.series.length - 1];
 
   if (last && sampled[sampled.length - 1]?.time !== last.time) {
     sampled.push(last);
@@ -38,64 +38,58 @@ function buildChartData(series: HeartRateSample[], config: ScoreResult["config"]
     time: sample.time,
     bpm: sample.bpm,
     target:
-      sample.bpm >= config.targetMin && sample.bpm <= config.targetMax
+      sample.status === "zone" || sample.status === "sweetspot"
         ? sample.bpm
         : null,
-    above:
-      sample.bpm > config.targetMax && sample.bpm <= config.redlineThreshold
-        ? sample.bpm
-        : null,
-    redline: sample.bpm > config.redlineThreshold ? sample.bpm : null,
-    deficit: sample.bpm < config.targetMin ? sample.bpm : null,
-    ego: sample.bpm > config.targetMax ? sample.bpm : null,
-    label: formatDuration(sample.time),
+    above: sample.status === "above" ? sample.bpm : null,
+    deficit: sample.status === "below" ? sample.bpm : null,
+    status: sample.status,
+    points: sample.points,
   }));
 }
 
-function ChartTooltip({ active, payload }: any) {
+function ChartTooltip({ active, payload }: TooltipContentProps) {
   if (!active || !payload?.length) return null;
 
   const point = payload[0]?.payload as ChartPoint | undefined;
   if (!point) return null;
 
-  const status =
-    point.bpm < 125 ? "below" : point.bpm <= 135 ? "target" : "above";
+  const color =
+    point.status === "above"
+      ? "#ff2b1c"
+      : point.status === "below"
+        ? "#9aa29a"
+        : "#39ff14";
 
   return (
-    <div className="border border-signal/30 bg-black/95 px-3 py-2 font-mono shadow-[0_0_24px_rgba(0,0,0,0.8)]">
+    <div className="border border-signal/30 bg-black/95 px-3 py-2.5 font-mono shadow-[0_0_24px_rgba(0,0,0,0.8)]">
       <div className="text-[8px] uppercase tracking-[0.18em] text-white/30">
         T+ {formatDuration(point.time)}
       </div>
       <div className="mt-1 flex items-baseline gap-2">
         <span className="text-lg font-bold text-white">{point.bpm}</span>
-        <span className="text-[8px] uppercase tracking-[0.15em] text-white/35">bpm</span>
+        <span className="text-[8px] uppercase tracking-[0.15em] text-white/35">
+          bpm
+        </span>
+        <span
+          className={`ml-auto text-[9px] font-bold ${point.points >= 0 ? "text-signal" : "text-blood-bright"}`}
+        >
+          {point.points >= 0 ? "+" : "−"}
+          {formatNumber(Math.abs(point.points))}
+        </span>
       </div>
-      <div
-        className={`mt-1 text-[8px] uppercase tracking-[0.14em] ${
-          status === "target"
-            ? "text-signal"
-            : status === "below"
-              ? "text-white/45"
-              : "text-blood-bright"
-        }`}
-      >
-        {zoneLabel(status)}
+      <div className="mt-1 text-[8px] uppercase tracking-[0.14em]" style={{ color }}>
+        {zoneLabel(point.status)}
       </div>
     </div>
   );
 }
 
 export function HeartRateChart({ result }: { result: ScoreResult }) {
-  const data = useMemo(
-    () => buildChartData(result.series, result.config),
-    [result.series, result.config],
-  );
-
-  const minBpm = Math.max(80, Math.min(110, result.minBpm - 8));
-  const maxBpm = Math.max(160, result.maxBpm + 8);
-  const targetMin = result.config.targetMin;
-  const targetMax = result.config.targetMax;
-  const redline = result.config.redlineThreshold;
+  const data = useMemo(() => buildChartData(result), [result]);
+  const { zoneMin, zoneMax, sweetSpotMin, sweetSpotMax } = result.config;
+  const minBpm = Math.max(70, Math.min(zoneMin - 15, result.minBpm - 8));
+  const maxBpm = Math.min(220, Math.max(zoneMax + 15, result.maxBpm + 8));
 
   const buckets = useMemo(() => {
     const count = 120;
@@ -105,9 +99,9 @@ export function HeartRateChart({ result }: { result: ScoreResult }) {
     for (let start = 0; start < result.series.length; start += size) {
       const bucket = result.series.slice(start, start + size);
       const worst = bucket.reduce((current, sample) => {
-        const rank = { target: 0, below: 1, above: 2, redline: 3 } as const;
+        const rank = { sweetspot: 0, zone: 1, below: 2, above: 3 } as const;
         return rank[sample.status] > rank[current] ? sample.status : current;
-      }, "target" as HeartRateSample["status"]);
+      }, "sweetspot" as HeartRateSample["status"]);
       output.push(worst);
     }
 
@@ -118,14 +112,18 @@ export function HeartRateChart({ result }: { result: ScoreResult }) {
     <div>
       <div className="h-[330px] w-full sm:h-[400px]">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={data} margin={{ top: 16, right: 8, bottom: 4, left: -18 }}>
+          <ComposedChart data={data} margin={{ top: 24, right: 10, bottom: 4, left: -14 }}>
             <CartesianGrid stroke="rgba(255,255,255,0.055)" vertical={false} />
             <XAxis
               dataKey="time"
               type="number"
               domain={[0, result.elapsedSeconds]}
               tickFormatter={(value: number) => formatDuration(value)}
-              tick={{ fill: "rgba(255,255,255,0.28)", fontSize: 9, fontFamily: "JetBrains Mono Variable" }}
+              tick={{
+                fill: "rgba(255,255,255,0.28)",
+                fontSize: 9,
+                fontFamily: "JetBrains Mono Variable",
+              }}
               axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
               tickLine={false}
               minTickGap={48}
@@ -133,53 +131,88 @@ export function HeartRateChart({ result }: { result: ScoreResult }) {
             <YAxis
               domain={[minBpm, maxBpm]}
               tickCount={8}
-              tick={{ fill: "rgba(255,255,255,0.28)", fontSize: 9, fontFamily: "JetBrains Mono Variable" }}
+              tick={{
+                fill: "rgba(255,255,255,0.28)",
+                fontSize: 9,
+                fontFamily: "JetBrains Mono Variable",
+              }}
               axisLine={false}
               tickLine={false}
               width={44}
             />
-            <Tooltip content={<ChartTooltip />} cursor={{ stroke: "rgba(57,255,20,0.35)", strokeDasharray: "3 3" }} />
+            <Tooltip
+              content={ChartTooltip}
+              cursor={{ stroke: "rgba(57,255,20,0.35)", strokeDasharray: "3 3" }}
+            />
 
             <ReferenceArea
-              y1={targetMin}
-              y2={targetMax}
+              y1={zoneMin}
+              y2={zoneMax}
               fill="#39ff14"
-              fillOpacity={0.07}
+              fillOpacity={0.13}
+              stroke="rgba(57,255,20,0.42)"
+              strokeOpacity={0.75}
+              strokeDasharray="3 5"
+              label={{
+                value: `PASILLO Z2 ${zoneMin}—${zoneMax}`,
+                position: "insideTopLeft",
+                fill: "rgba(57,255,20,0.58)",
+                fontSize: 8,
+                fontFamily: "JetBrains Mono Variable",
+              }}
               ifOverflow="extendDomain"
             />
             <ReferenceArea
-              y1={targetMax}
-              y2={redline}
+              y1={zoneMax}
+              y2={maxBpm}
               fill="#b30000"
-              fillOpacity={0.045}
+              fillOpacity={0.065}
               ifOverflow="extendDomain"
             />
             <ReferenceLine
-              y={redline}
-              stroke="rgba(255,43,28,0.7)"
-              strokeDasharray="4 4"
-              strokeWidth={1}
+              y={zoneMax}
+              stroke="rgba(255,43,28,0.85)"
+              strokeDasharray="4 3"
+              strokeWidth={1.2}
+              label={{
+                value: "TECHO / EGO",
+                position: "insideTopRight",
+                fill: "rgba(255,43,28,0.65)",
+                fontSize: 7,
+                fontFamily: "JetBrains Mono Variable",
+              }}
             />
             <ReferenceLine
-              y={targetMax}
-              stroke="rgba(57,255,20,0.28)"
-              strokeDasharray="2 4"
-              strokeWidth={1}
+              y={zoneMin}
+              stroke="rgba(57,255,20,0.72)"
+              strokeDasharray="3 4"
+              strokeWidth={1.1}
             />
-            <ReferenceLine
-              y={targetMin}
-              stroke="rgba(57,255,20,0.28)"
-              strokeDasharray="2 4"
-              strokeWidth={1}
+            <ReferenceArea
+              y1={sweetSpotMin}
+              y2={sweetSpotMax}
+              fill="#c8ffb9"
+              fillOpacity={0.22}
+              stroke="#c8ffb9"
+              strokeOpacity={0.7}
+              strokeDasharray="2 3"
+              label={{
+                value: `SWEET BAND ${formatBpm(sweetSpotMin)}—${formatBpm(sweetSpotMax)}`,
+                position: "insideTopRight",
+                fill: "rgba(218,255,205,0.85)",
+                fontSize: 8,
+                fontFamily: "JetBrains Mono Variable",
+              }}
+              ifOverflow="extendDomain"
             />
 
             <Area
               type="monotone"
-              dataKey="ego"
-              baseValue={targetMax}
+              dataKey="above"
+              baseValue={zoneMax}
               stroke="none"
               fill="#b30000"
-              fillOpacity={0.5}
+              fillOpacity={0.42}
               connectNulls={false}
               isAnimationActive={false}
               activeDot={false}
@@ -187,10 +220,10 @@ export function HeartRateChart({ result }: { result: ScoreResult }) {
             <Area
               type="monotone"
               dataKey="deficit"
-              baseValue={targetMin}
+              baseValue={zoneMin}
               stroke="none"
               fill="#8b958b"
-              fillOpacity={0.3}
+              fillOpacity={0.24}
               connectNulls={false}
               isAnimationActive={false}
               activeDot={false}
@@ -199,7 +232,7 @@ export function HeartRateChart({ result }: { result: ScoreResult }) {
               type="monotone"
               dataKey="bpm"
               stroke="#39ff14"
-              strokeOpacity={0.16}
+              strokeOpacity={0.15}
               strokeWidth={1}
               dot={false}
               activeDot={false}
@@ -209,29 +242,19 @@ export function HeartRateChart({ result }: { result: ScoreResult }) {
               type="monotone"
               dataKey="deficit"
               stroke="#9aa29a"
-              strokeWidth={1.5}
+              strokeWidth={1.6}
               dot={false}
-              activeDot={false}
+              activeDot={{ r: 3, fill: "#9aa29a", stroke: "#050505", strokeWidth: 2 }}
               connectNulls={false}
               isAnimationActive={false}
             />
             <Line
               type="monotone"
               dataKey="above"
-              stroke="#ff5a3d"
-              strokeWidth={1.5}
-              dot={false}
-              activeDot={false}
-              connectNulls={false}
-              isAnimationActive={false}
-            />
-            <Line
-              type="monotone"
-              dataKey="redline"
               stroke="#ff2b1c"
               strokeWidth={1.8}
               dot={false}
-              activeDot={false}
+              activeDot={{ r: 3, fill: "#ff2b1c", stroke: "#050505", strokeWidth: 2 }}
               connectNulls={false}
               isAnimationActive={false}
             />
@@ -239,7 +262,7 @@ export function HeartRateChart({ result }: { result: ScoreResult }) {
               type="monotone"
               dataKey="target"
               stroke="#39ff14"
-              strokeWidth={1.5}
+              strokeWidth={1.6}
               dot={false}
               activeDot={{ r: 3, fill: "#39ff14", stroke: "#050505", strokeWidth: 2 }}
               connectNulls={false}
@@ -254,12 +277,12 @@ export function HeartRateChart({ result }: { result: ScoreResult }) {
           <span
             key={index}
             className={`h-2 flex-1 ${
-              status === "redline"
+              status === "above"
                 ? "bg-blood-bright"
-                : status === "above"
-                  ? "bg-blood"
-                  : status === "below"
-                    ? "bg-white/20"
+                : status === "below"
+                  ? "bg-white/20"
+                  : status === "sweetspot"
+                    ? "bg-[#c8ffb9]"
                     : "bg-signal/70"
             }`}
           />
@@ -268,16 +291,16 @@ export function HeartRateChart({ result }: { result: ScoreResult }) {
 
       <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[8px] uppercase tracking-[0.13em] text-white/35">
         <span className="flex items-center gap-2">
-          <span className="h-1.5 w-3 bg-signal" /> EN DIANA 125-135
+          <span className="h-1.5 w-3 border border-signal/60 bg-signal/15" /> PASILLO Z2 {zoneMin}-{zoneMax}
         </span>
         <span className="flex items-center gap-2">
-          <span className="h-1.5 w-3 bg-blood" /> EXCESO &gt;135
+          <span className="h-1.5 w-3 bg-[#c8ffb9]" /> SWEET BAND {formatBpm(sweetSpotMin)}—{formatBpm(sweetSpotMax)}
         </span>
         <span className="flex items-center gap-2">
-          <span className="h-1.5 w-3 bg-white/20" /> DÉFICIT &lt;125
+          <span className="h-1.5 w-3 bg-blood" /> EGO &gt;{zoneMax}
         </span>
         <span className="flex items-center gap-2">
-          <span className="h-1.5 w-3 bg-[#ff2b1c]" /> REDLINE &gt;145
+          <span className="h-1.5 w-3 bg-white/20" /> DÉFICIT &lt;{zoneMin}
         </span>
         <span className="ml-auto hidden sm:inline">1 SAMPLE = 1 SECOND</span>
       </div>

@@ -64,16 +64,19 @@ export function StatusDot({
   );
 }
 
-export function StravaMark({ className = "" }: { className?: string }) {
+export function SuuntoMark({ className = "" }: { className?: string }) {
   return (
     <svg
       aria-hidden="true"
       viewBox="0 0 24 24"
-      fill="currentColor"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.3"
       className={className}
     >
-      <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.062z" />
-      <path d="M10.272 0L0 20.654h5.96l4.312-8.775 4.313 8.775h5.957z" />
+      <circle cx="12" cy="12" r="9" />
+      <path d="m15.5 8.5-2.4 4.6-4.6 2.4 2.4-4.6 4.6-2.4Z" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none" />
     </svg>
   );
 }

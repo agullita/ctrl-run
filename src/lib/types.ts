@@ -1,9 +1,35 @@
-export type ZoneStatus = "below" | "target" | "above" | "redline";
+export type ZoneStatus = "below" | "zone" | "sweetspot" | "above";
 
-export interface HeartRateSample {
+export type ZoneKey = "z1" | "z2" | "z3" | "z4" | "z5";
+
+export type CalibrationMethod = "karvonen" | "manual";
+
+export interface ZoneRange {
+  min: number;
+  max: number;
+}
+
+export interface ZoneProfile {
+  calibrationMethod: CalibrationMethod;
+  hrMax: number | null;
+  hrRest: number | null;
+  zones: Record<ZoneKey, ZoneRange | null>;
+}
+
+export interface UserProfile extends ZoneProfile {
+  id: string | null;
+  remote: boolean;
+}
+
+export interface HeartRatePoint {
   time: number;
   bpm: number;
+}
+
+export interface HeartRateSample extends HeartRatePoint {
   status: ZoneStatus;
+  points: number;
+  offset: number;
 }
 
 export interface Activity {
@@ -20,28 +46,29 @@ export interface Activity {
   isDemo: boolean;
 }
 
-export interface StravaStream {
-  type: string;
-  data: number[];
-  series_type?: string;
-  original_size?: number;
-  resolution?: string;
-}
+export type ActivityOrigin = "suunto" | "supabase" | "demo" | "file";
 
 export interface ActivityPayload {
   activity: Activity;
-  streams: StravaStream[];
-  origin: "supabase" | "local" | "strava";
+  samples: HeartRatePoint[];
+  origin: ActivityOrigin;
 }
 
 export interface ScoringConfig {
-  targetMin: number;
-  targetMax: number;
-  startingScore: number;
-  belowPenalty: number;
-  abovePenalty: number;
-  redlineThreshold: number;
-  redlineAlertSeconds: number;
+  zoneKey: ZoneKey;
+  zoneLabel: string;
+  zoneMin: number;
+  zoneMax: number;
+  targetBpm: number;
+  sweetSpotMin: number;
+  sweetSpotMax: number;
+  maxPointsPerSecond: number;
+  sweetSpotPoints: number;
+  zonePoints: number;
+  egoPenaltyPerBeat: number;
+  deficitPenaltyPerBeat: number;
+  egoAlertSeconds: number;
+  graceSeconds: number;
 }
 
 export interface Breach {
@@ -51,24 +78,35 @@ export interface Breach {
   duration: number;
   peak: number;
   pointsLost: number;
+  excessBeats: number;
   critical: boolean;
 }
 
 export interface ScoreResult {
   score: number;
-  pointsLost: number;
+  score1000: number;
+  grossPoints: number;
+  penaltyPoints: number;
+  sweetSpotPoints: number;
+  zonePoints: number;
+  egoPenaltyPoints: number;
+  deficitPenaltyPoints: number;
+  maxPossible: number;
+  precisionPercent: number;
   elapsedSeconds: number;
   targetSeconds: number;
+  sweetSpotSeconds: number;
   aboveSeconds: number;
   belowSeconds: number;
-  redlineSeconds: number;
+  graceAbsorbedSeconds: number;
   targetPercent: number;
+  sweetSpotPercent: number;
   averageBpm: number;
   minBpm: number;
   maxBpm: number;
   egoAlert: boolean;
-  longestRedline: number;
-  redlineStart: number | null;
+  longestEgo: number;
+  egoStart: number | null;
   breaches: Breach[];
   series: HeartRateSample[];
   config: ScoringConfig;
@@ -84,17 +122,25 @@ export interface Mission {
   id: string;
   code: string;
   name: string;
-  objective: string;
   durationMinutes: number;
-  targetMin: number;
-  targetMax: number;
-  baseScore: number;
-  tolerance: number;
 }
 
 export interface StoredRun {
   activity: Activity;
   result: ScoreResult;
-  origin: ActivityPayload["origin"];
+  origin: ActivityOrigin;
   syncedAt: string;
+}
+
+export interface SuuntoStatus {
+  connected: boolean;
+  username: string | null;
+  expiresAt: string | null;
+  demo: boolean;
+}
+
+export interface SuuntoSyncPayload {
+  activity: Activity;
+  samples: HeartRatePoint[];
+  origin: "suunto" | "supabase";
 }

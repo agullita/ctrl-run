@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
 import { ArrowUpRight, Check, X } from "lucide-react";
-import { STRAVA_DEMO_MODE } from "../lib/strava";
-import { CornerMarks, StatusDot, StravaMark } from "./Icons";
+import { SUUNTO_DEMO_MODE } from "../lib/suunto";
+import { CornerMarks, StatusDot, SuuntoMark } from "./Icons";
 
 const LOG_LINES = [
-  "GET https://www.strava.com/oauth/authorize",
-  "PARAMS client_id=PUBLIC_CLIENT  response_type=code  scope=read,activity:read_all",
-  "HANDSHAKE ................................................ OK",
-  "STREAM DISCOVERY time,heartrate ......................... OK",
-  "AUDIT ENGINE 1HZ ...................................... ARMED",
+  "GET https://cloudapi-oauth.suunto.com/oauth/authorize",
+  "PARAMS response_type=code  client_id=PUBLIC_CLIENT  redirect_uri=/auth/suunto/callback",
+  "HANDSHAKE SUUNTO CLOUD API ............................... OK",
+  "GET /v3/workouts/{key}?extensions=HeartrateStreamExtension",
+  "PRECISION ENGINE / SWEET BAND .......................... ARMED",
 ];
 
-export function StravaModal({
+export function SuuntoModal({
   open,
   onClose,
   onAuthorize,
@@ -36,7 +36,7 @@ export function StravaModal({
         }
         return current + 1;
       });
-    }, 280);
+    }, 260);
 
     return () => window.clearInterval(timer);
   }, [open]);
@@ -61,7 +61,7 @@ export function StravaModal({
       className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
-      aria-label="Conexión con Strava"
+      aria-label="Conexión con Suunto"
     >
       <div className="relative w-full max-w-xl border border-signal/25 bg-[#070807]">
         <CornerMarks />
@@ -69,7 +69,7 @@ export function StravaModal({
           <div className="flex items-center gap-2.5">
             <StatusDot tone="signal" pulse />
             <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/50">
-              OAuth2 // Strava
+              OAuth2 // Suunto Cloud API
             </span>
           </div>
           <button
@@ -89,11 +89,11 @@ export function StravaModal({
                 Enlazar motor
               </h2>
               <p className="mt-2 max-w-sm font-mono text-[9px] uppercase leading-relaxed tracking-[0.12em] text-white/35">
-                Solo lectura de actividad y pulso. Ctrl+run no escribe en tu
-                Strava. No publica nada. No te aplaude.
+                Lectura de workouts y frecuencia cardíaca. El token se intercambia
+                y se guarda en el servidor. Ctrl+run no escribe en tu cuenta.
               </p>
             </div>
-            <StravaMark className="h-7 w-7 text-[#fc4c02]" />
+            <SuuntoMark className="h-8 w-8 text-signal" />
           </div>
 
           <div className="mt-5 border border-white/10 bg-black p-3.5 font-mono text-[9px] leading-relaxed text-white/45">
@@ -119,9 +119,9 @@ export function StravaModal({
             </div>
           </div>
 
-          <div className="mt-4 flex items-center justify-between">
+          <div className="mt-4 flex items-center justify-between gap-4">
             <span className="font-mono text-[8px] uppercase tracking-[0.16em] text-white/25">
-              {STRAVA_DEMO_MODE ? "Modo demo / stream local" : "OAuth2 real"}
+              {SUUNTO_DEMO_MODE ? "Modo demo / stream Suunto local" : "OAuth2 real"}
             </span>
             <button
               type="button"
@@ -129,7 +129,7 @@ export function StravaModal({
               disabled={!ready}
               className="group inline-flex items-center gap-3 border border-signal bg-signal px-4 py-3 font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-black transition-colors hover:bg-black hover:text-signal disabled:cursor-not-allowed disabled:opacity-35"
             >
-              {STRAVA_DEMO_MODE ? "Entrar al panel" : "Autorizar en Strava"}
+              {SUUNTO_DEMO_MODE ? "Entrar al panel" : "Autorizar en Suunto"}
               <ArrowUpRight className="h-3.5 w-3.5" />
             </button>
           </div>

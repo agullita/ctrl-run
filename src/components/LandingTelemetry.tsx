@@ -1,16 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { buildMockHeartRate } from "../lib/mockActivity";
+import { DEFAULT_BIOMETRICS, createProfile } from "../lib/zones";
 import { CornerMarks, StatusDot } from "./Icons";
 
 const WINDOW = 90;
+const DEMO_ZONE = createProfile(DEFAULT_BIOMETRICS.hrMax, DEFAULT_BIOMETRICS.hrRest).zones.z2!;
+const SWEET = (DEMO_ZONE.min + DEMO_ZONE.max) / 2;
+const SWEET_MIN = SWEET - 2;
+const SWEET_MAX = SWEET + 2;
 
 function statusFor(bpm: number): {
   label: string;
   tone: "signal" | "warning" | "blood";
 } {
-  if (bpm < 125) return { label: "DÉFICIT", tone: "warning" };
-  if (bpm <= 135) return { label: "HOLD / EN DIANA", tone: "signal" };
-  if (bpm <= 145) return { label: "EXCESO", tone: "warning" };
+  if (bpm < DEMO_ZONE.min) return { label: "DÉFICIT", tone: "warning" };
+  if (bpm >= SWEET_MIN && bpm <= SWEET_MAX) return { label: "SWEET BAND", tone: "signal" };
+  if (bpm <= DEMO_ZONE.max) return { label: "EN ZONA", tone: "signal" };
+  if (bpm <= DEMO_ZONE.max + 10) return { label: "EXCESO", tone: "warning" };
   return { label: "REDLINE / EGO", tone: "blood" };
 }
 
@@ -27,9 +33,9 @@ export function LandingTelemetry() {
   }, [heartrate.length]);
 
   const windowData = heartrate.slice(cursor, cursor + WINDOW);
-  const current = windowData[windowData.length - 1] ?? 130;
+  const current = windowData[windowData.length - 1] ?? SWEET;
   const status = statusFor(current);
-  const delta = current - 130;
+  const delta = current - SWEET;
 
   const points = windowData
     .map((bpm, index) => {
@@ -41,8 +47,8 @@ export function LandingTelemetry() {
 
   const lastX = 300;
   const lastY = 92 - ((current - 100) / 60) * 80;
-  const bandTop = 92 - ((135 - 100) / 60) * 80;
-  const bandBottom = 92 - ((125 - 100) / 60) * 80;
+  const bandTop = 92 - ((DEMO_ZONE.max - 100) / 60) * 80;
+  const bandBottom = 92 - ((DEMO_ZONE.min - 100) / 60) * 80;
 
   return (
     <div className="relative w-full border border-white/10 bg-[#080908]/90">
@@ -51,7 +57,7 @@ export function LandingTelemetry() {
         <div className="flex items-center gap-2.5">
           <StatusDot tone="signal" pulse />
           <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/50">
-            Live feed / MOCK-042
+            Live feed / SUUNTO-042
           </span>
         </div>
         <div className="flex items-center gap-2 font-mono text-[8px] uppercase tracking-[0.18em] text-white/25">
@@ -96,8 +102,8 @@ export function LandingTelemetry() {
 
       <div className="relative mx-4 mb-4 border border-white/[0.07] bg-black/60 sm:mx-5">
         <div className="absolute left-0 top-0 z-10 flex gap-3 px-2 py-1 font-mono text-[7px] uppercase tracking-[0.14em] text-white/20">
-          <span>TARGET 125-135</span>
-          <span className="text-blood-bright/50">+145</span>
+          <span>Z2 {DEMO_ZONE.min}-{DEMO_ZONE.max}</span>
+          <span className="text-blood-bright/50">SWEET {SWEET_MIN}—{SWEET_MAX}</span>
         </div>
         <svg
           viewBox="0 0 300 100"
@@ -135,8 +141,8 @@ export function LandingTelemetry() {
           <line
             x1="0"
             x2="300"
-            y1={92 - ((145 - 100) / 60) * 80}
-            y2={92 - ((145 - 100) / 60) * 80}
+            y1={92 - ((DEMO_ZONE.max - 100) / 60) * 80}
+            y2={92 - ((DEMO_ZONE.max - 100) / 60) * 80}
             stroke="rgba(255,43,28,0.35)"
             strokeWidth="0.7"
             strokeDasharray="3 3"
@@ -161,10 +167,10 @@ export function LandingTelemetry() {
 
       <div className="grid grid-cols-2 border-t border-white/10 font-mono text-[8px] uppercase tracking-[0.13em] sm:grid-cols-4">
         {[
-          ["Source", "MOCK-042"],
-          ["Zone", "ZONA 02"],
+          ["Source", "SUUNTO-042"],
+          ["Zone", `Z2 ${DEMO_ZONE.min}-${DEMO_ZONE.max}`],
           ["Alert", status.tone === "blood" ? "EGO" : "NONE"],
-          ["Score est.", "850 / 1K"],
+          ["Max rate", "+10 PTS/S"],
         ].map(([label, value], index) => (
           <div
             key={label}

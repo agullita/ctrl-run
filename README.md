@@ -2,13 +2,12 @@
 
 **Apaga el ego. Enciende el control.**
 
-MVP single-player de un árbitro fisiológico: conecta Strava, recibe una misión de frecuencia cardíaca y deja que el motor audite el stream de pulso segundo a segundo. No registra entrenamientos: los juzga.
+MVP de telemetría fisiológica: conecta Suunto, calibra tus zonas por Karvonen y audita la precisión de tu frecuencia cardíaca segundo a segundo. No premia el esfuerzo bruto; premia la obediencia al micro-pasillo central de la zona.
 
-- **Stack:** React 19 + TypeScript + Vite + Tailwind CSS v4 + Recharts + Supabase + Strava API.
-- **Estética:** terminal brutalista, JetBrains Mono + Space Grotesk, verde señal `#39ff14`, rojo sangre `#b30000`.
-- **Estado actual:** flujo demo funcional de punta a punta. Sin variables de entorno, corre con un stream mock determinista de 40 minutos que puntúa **850/1000** y activa la alerta de redline.
+- **Stack:** React 19, TypeScript, Vite, Tailwind CSS v4, Recharts, Supabase y Suunto Cloud API.
 - **Demo online:** <https://ctrl-run-chi.vercel.app>
 - **Repositorio:** <https://github.com/agullita/ctrl-run>
+- **Modo demo:** sin credenciales de Suunto usa una actividad local de 45 minutos y permite probar todo el flujo.
 
 ## Arranque rápido
 
@@ -17,140 +16,173 @@ npm install
 npm run dev
 ```
 
-Abrí `http://localhost:5173`.
+Flujo:
 
-Flujo de prueba:
-
-1. `Sincronizar con Strava` → handshake OAuth2 simulado.
-2. Panel → `Sincronizar última actividad`.
-3. El motor procesa 2.400 muestras a 1 Hz y abre la vista del árbitro.
+1. Landing → **Sincronizar con Suunto**.
+2. Onboarding Karvonen → introduce **FCM** y **FCR**.
+3. Panel → selecciona la zona de la misión: Z1–Z5.
+4. **Sincronizar última actividad**.
+5. El Árbitro calcula los puntos y abre el informe.
 
 Comandos:
 
 ```bash
-npm run dev        # Vite
-npm run build      # typecheck + build de producción
-npm run typecheck  # tsc --noEmit
-npm test           # Vitest: scoring + normalización Strava
-npm run preview    # preview del build
-npm run seed:sql   # regenera supabase/seed.sql desde el mock
+npm run dev
+npm run build
+npm run typecheck
+npm test
+npm run preview
 ```
 
-## Rutas
+## Importación de archivos
 
-| Ruta | Vista |
+Ruta `/importar`, disponible también desde el panel. Permite auditar una actividad sin Suunto ni OAuth:
+
+- `.fit` mediante Garmin FIT SDK (carga diferida).
+- `.tcx` y `.gpx` mediante parser XML local.
+- `.csv` con columnas `time,bpm`.
+
+El archivo se procesa en el navegador. Solo se persisten el informe y sus métricas. La zona activa (Z1–Z5) se elige antes de auditar.
+
+## Motor de precisión
+
+Para la zona seleccionada, el motor calcula:
+
+```text
+target_bpm = round((zone_min + zone_max) / 2)
+```
+
+Por cada muestra de 1 Hz:
+
+- Antes de penalizar se aplica un **Grace Period de 15 segundos continuados** fuera de zona. Los picos cortos no restan puntos.
+- Al superar esos 15 segundos, la penalización empieza a aplicarse segundo a segundo.
+
+| Situación | Cálculo |
 | --- | --- |
-| `/` | Landing + manifiesto + handshake OAuth2 |
-| `/panel` | Misión 01 / El Monje + sincronización |
-| `/arbitro` | Puntuación, gráfica, alertas y desglose |
-| `/auth/strava` | Callback OAuth2 real (Edge Function) |
+| Dentro de la Sweet Band (±2 latidos del centro) | `+10` |
+| Dentro de la zona, fuera de la Sweet Band | `+5` |
+| Por encima de `zone_max` | `-(bpm - zone_max) × 5` |
+| Por debajo de `zone_min` | `-(zone_min - bpm) × 2` |
 
-## Algoritmo de precisión
+El motor suma/resta puntos brutos por segundo. Para la UI, la puntuación se normaliza sobre el máximo teórico y se limita al rango **0000–1000**; nunca se muestran puntuaciones negativas. El informe muestra:
 
-Configuración por defecto en `src/lib/scoring.ts`:
+- Marcador normalizado `0000 / 1000`.
+- Penalización bruta aplicada.
+- Tiempo en zona y tiempo dentro de la Sweet Band.
+- Top 5 fallos de ego de más de 10 segundos; el resto del ruido se oculta.
+- Alerta de ego sostenido si se supera `zone_max` durante más de 30 segundos.
 
-| Regla | Valor |
-| --- | --- |
-| Puntuación base | 1000 |
-| Diana estricta | 125–135 bpm |
-| Por segundo en diana | 0 puntos |
-| Por segundo > 135 bpm (ego) | −2 puntos |
-| Por segundo < 125 bpm (déficit) | −1 punto |
-| Redline | > 145 bpm |
-| Alerta de disciplina | redline continuo > 30 s |
+Los umbrales de veredicto se aplican sobre el marcador 0–1000: `>900` control quirúrgico, `600–900` fugas de control, `<600` ego desbocado.
 
-El stream se normaliza a 1 muestra por segundo (interpolación si Strava entrega timestamps irregulares). Se calculan ventanas contiguas de exceso/déficit, tiempo en diana, pico, duración, puntos perdidos y `egoAlert`.
+## Onboarding fisiológico
 
-Veredictos:
+La app admite dos métodos:
 
-- `> 900`: **Control quirúrgico. Has dominado el ego.**
-- `600–900`: **Fugas de control. Te has dejado llevar en las cuestas.**
-- `< 600`: **Ego desbocado. Entrenamiento fallido. Has corrido para la galería, no para tu corazón.**
+- **Karvonen:** calcula las cinco zonas desde FCM y FCR.
+- **Manual / LTHR:** guarda directamente los límites de Z2 configurados en el reloj. En este modo solo Z2 está disponible.
 
-## Supabase (mock en base de datos)
+Karvonen usa:
 
-1. Creá un proyecto en Supabase.
-2. Ejecutá `supabase/migrations/202610220001_init.sql` en el SQL Editor.
-3. Regenerá el seed con `npm run seed:sql` y ejecutá `supabase/seed.sql` (inserta la actividad demo + 2.400 muestras de pulso).
-4. Copiá `.env.example` a `.env.local` y completá:
+```text
+FC Reserva = FCM - FCR
+Z1 = 50–60 %
+Z2 = 60–70 %
+Z3 = 70–80 %
+Z4 = 80–90 %
+Z5 = 90–100 %
+```
+
+Se guardan el método, `hr_max`, `hr_rest` y los 10 límites de zona en Supabase (o en localStorage si no hay sesión remota).
+
+## Suunto OAuth2
+
+La app usa los endpoints oficiales:
+
+- Autorización: `https://cloudapi-oauth.suunto.com/oauth/authorize`
+- Token: `https://cloudapi-oauth.suunto.com/oauth/token`
+- API: `https://cloudapi.suunto.com`
+
+El callback es `/auth/suunto/callback`. El intercambio de `code` y el `refresh_token` se realizan en la Edge Function `suunto-oauth`. El Client Secret nunca se expone al navegador.
+
+La sincronización usa `suunto-sync`:
+
+1. `GET /v3/workouts?limit=1`
+2. `GET /v3/workouts/{workoutKey}?extensions=HeartrateStreamExtension,SummaryExtension`
+3. Normaliza los `points` de la extensión de pulso a muestras de 1 Hz.
+
+La API de Suunto requiere la cabecera `Ocp-Apim-Subscription-Key`; se configura solo como secreto del servidor.
+
+## Supabase
+
+### 1. Autenticación
+
+Activa **Anonymous Sign-Ins** en Supabase Dashboard → Authentication → Sign In / Providers. Ctrl+run crea una sesión anónima para vincular el perfil y los tokens sin pedir registro.
+
+### 2. Migración
+
+Aplica `supabase/migrations/202610250001_suunto_precision.sql` desde el SQL Editor o con la CLI.
+
+Tablas creadas:
+
+- `public.profiles`: `id`, `hr_max`, `hr_rest`, `z1_min`…`z5_max`.
+- `public.suunto_tokens`: tokens de Suunto, solo accesibles con `service_role`.
+- `public.precision_runs`: histórico de auditorías y snapshots de configuración.
+
+RLS limita perfiles y auditorías al usuario autenticado. `suunto_tokens` no tiene políticas de cliente.
+
+### 3. Edge Functions
+
+```bash
+supabase functions deploy suunto-oauth
+supabase functions deploy suunto-sync
+```
+
+Secretos del servidor:
+
+```bash
+supabase secrets set \
+  SUUNTO_CLIENT_ID=... \
+  SUUNTO_CLIENT_SECRET=... \
+  SUUNTO_REDIRECT_URI=https://TU_DOMINIO/auth/suunto/callback \
+  SUUNTO_SUBSCRIPTION_KEY=... \
+  SUUNTO_API_BASE=https://cloudapi.suunto.com
+```
+
+`SUPABASE_URL`, `SUPABASE_ANON_KEY`/`SUPABASE_PUBLISHABLE_KEY` y `SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_SECRET_KEY` los inyecta el runtime de Supabase.
+
+### 4. Cliente
+
+Copia `.env.example` a `.env.local`:
 
 ```env
 VITE_SUPABASE_URL=https://xxxx.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJ...
+VITE_SUPABASE_ANON_KEY=sb_publishable_...
+VITE_SUUNTO_CLIENT_ID=...
+VITE_SUUNTO_REDIRECT_URI=http://localhost:5173/auth/suunto/callback
+VITE_SUUNTO_DEMO_MODE=false
 ```
 
-5. Reiniciá Vite. El panel mostrará `SUPABASE // REMOTE` y `activityRepository` leerá la actividad desde `activities` + `activity_streams`. Si Supabase falla o no está configurado, cae automáticamente al mock local.
+Con `VITE_SUUNTO_DEMO_MODE=true` o sin Client ID, la app usa el stream demo.
 
-Tablas: `activities`, `activity_streams`, `evaluations`. RLS de demo habilitado para lectura pública de la actividad demo e inserción de evaluaciones.
-
-## Strava OAuth2 real
-
-La integración ya está preparada; el modo demo es el default.
-
-1. Creá una app en <https://www.strava.com/settings/api>.
-2. Authorization Callback Domain: `localhost` (desarrollo).
-3. Configurá `.env.local`:
-
-```env
-VITE_STRAVA_CLIENT_ID=tu_client_id
-VITE_STRAVA_REDIRECT_URI=http://localhost:5173/auth/strava
-VITE_STRAVA_DEMO_MODE=false
-```
-
-4. Desplegá la Edge Function y configurá los secretos:
-
-```bash
-supabase functions deploy strava
-supabase secrets set STRAVA_CLIENT_ID=... STRAVA_CLIENT_SECRET=...
-```
-
-5. Sin `VITE_SUPABASE_URL`/`ANON_KEY` el callback no puede canjear el código. El client secret nunca se expone al navegador.
-
-La Edge Function consulta:
-
-- `GET /api/v3/athlete/activities?per_page=1`
-- `GET /api/v3/activities/{id}/streams?keys=time,heartrate&key_by_type=true`
-
-El frontend normaliza la respuesta antes de puntuar.
-
-## Demo online y Vercel
+## Vercel
 
 - Producción: <https://ctrl-run-chi.vercel.app>
-- Repositorio conectado: los pushes a `master` generan un deploy automático.
-- Sin variables configuradas en Vercel, la demo online usa el stream mock local.
-
-Para activar Strava real en producción:
-
-1. En Strava, cambiá **Authorization Callback Domain** a `ctrl-run-chi.vercel.app`.
-2. En Vercel, agregá `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_STRAVA_CLIENT_ID`, `VITE_STRAVA_REDIRECT_URI=https://ctrl-run-chi.vercel.app/auth/strava` y `VITE_STRAVA_DEMO_MODE=false`.
-3. Ejecutá `supabase secrets set STRAVA_REDIRECT_URI=https://ctrl-run-chi.vercel.app/auth/strava` junto con las credenciales de Strava.
-4. Redesplegá para reconstruir el bundle con las variables.
-
-Un dominio propio se configura desde Vercel y debe coincidir en Strava, `.env` y los secrets de Supabase.
-
-## Variables de entorno
-
-| Variable | Ámbito | Uso |
-| --- | --- | --- |
-| `VITE_SUPABASE_URL` | cliente | proyecto Supabase |
-| `VITE_SUPABASE_ANON_KEY` | cliente | lectura demo / edge functions |
-| `VITE_STRAVA_CLIENT_ID` | cliente | URL OAuth2 |
-| `VITE_STRAVA_REDIRECT_URI` | cliente | callback (`/auth/strava`) |
-| `VITE_STRAVA_DEMO_MODE` | cliente | `true` simula el handshake |
-| `STRAVA_CLIENT_ID` | Edge Function | canje de token |
-| `STRAVA_CLIENT_SECRET` | Edge Function | canje de token |
-| `STRAVA_REDIRECT_URI` | Edge Function | coherencia OAuth2 |
+- El repositorio está conectado; cada push a `master` despliega.
+- Para OAuth real, actualiza `VITE_SUUNTO_REDIRECT_URI` y `SUUNTO_REDIRECT_URI` a `https://TU_DOMINIO/auth/suunto/callback`.
+- Registra ese mismo dominio en la configuración OAuth de Suunto.
+- Reconstruye el deployment después de cambiar variables.
 
 ## Estructura
 
-```
+```text
 src/
-  components/     UI, logo, gráfica, telemetría, botones
-  context/        RunContext (sync, sesión, errores)
-  lib/            scoring, mock, Supabase, Strava, formato
-  pages/          Landing, Dashboard, Referee, AuthCallback
+  components/     UI, telemetría, gráfica, gauge, score, modal Suunto
+  context/        perfil, sesión Suunto, sync y motor
+  lib/            zones, scoring, Suunto, Supabase, fileImport, mock
+  pages/          Landing, Onboarding, Dashboard, Import, Referee, Callback
 supabase/
-  migrations/     esquema + RLS
-  seed.sql        actividad demo + stream
-  functions/      edge function de canje OAuth2
+  migrations/     perfiles, tokens, auditorías
+  functions/
+    suunto-oauth/ intercambio y refresco de tokens
+    suunto-sync/  workouts + HeartrateStreamExtension
 ```
